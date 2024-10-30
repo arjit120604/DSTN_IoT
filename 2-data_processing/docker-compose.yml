@@ -1,0 +1,21 @@
+
+services:
+  jobmanager:
+    image: flink:1.20
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    volumes:
+      - ./config.yaml:/opt/flink/conf/config.yaml
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+
+  taskmanager:
+    image: flink:1.20
+    depends_on:
+      - jobmanager
+    command: taskmanager
+    volumes:
+      - ./config.yaml:/opt/flink/conf/config.yaml
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
