@@ -9,7 +9,7 @@ blob:
 taskmanager:
   memory:
     process:
-      size: 1024m
+      size: 2048m
   numberOfTaskSlots: 1
 parallelism:
   default: 1
@@ -18,7 +18,7 @@ jobmanager:
     address: jobmanager
   memory:
     process:
-      size: 1024m
+      size: 2048m
 state:
   backend: filesystem
   checkpoints:

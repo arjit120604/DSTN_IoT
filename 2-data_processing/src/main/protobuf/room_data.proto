@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package protobuf;
+
+option java_package = "app.proto";
+
+option java_outer_classname = "RoomDataProtos";
+
+message RoomData {
+  string room_id = 1;
+  double temperature = 2;
+  double humidity = 3;
+  double energy_consumption = 4;
+  int64 timestamp = 5;
+}
+
+message RoomDataBatch {
+  repeated RoomData readings = 1;
+}

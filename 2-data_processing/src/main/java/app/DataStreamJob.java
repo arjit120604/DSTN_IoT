@@ -18,7 +18,22 @@
 
 package app;
 
+import app.models.RoomData;
+import app.proto.RoomDataProtos;
+import app.serialization.RoomDataPojoDeserialization;
+import app.serialization.RoomDataProtoDeserialization;
+import org.apache.flink.api.common.serialization.DeserializationSchema;
+import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.api.common.serialization.SimpleStringSchema;
+import org.apache.flink.connector.kafka.source.KafkaSource;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
+
+import java.lang.reflect.Type;
+import java.util.Properties;
 
 /**
  * Skeleton for a Flink DataStream Job.
@@ -33,33 +48,75 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * method, change the respective entry in the POM.xml file (simply search for 'mainClass').
  */
 public class DataStreamJob {
+	private static final String[] ROOM_TOPICS = {
+			"room1-sensors",
+			"room2-sensors",
+			"room3-sensors",
+			"room4-sensors"
+	};
+	private static KafkaSource<RoomData> createRoomSource(String topic, Properties properties, DeserializationSchema<RoomData> deserializer) {
+		return KafkaSource.<RoomData>builder()
+				.setProperties(properties)
+				.setTopics(topic)
+				.setStartingOffsets(OffsetsInitializer.earliest())
+				.setValueOnlyDeserializer(deserializer)
+				.build();
+	}
+
+	private static DataStream<RoomData> createRoomStreams(
+			StreamExecutionEnvironment env,
+			Properties properties,
+			DeserializationSchema<RoomData> deserializer) {
+
+		DataStream<RoomData> resultStream = null;
+
+		for (String topic : ROOM_TOPICS) {
+			KafkaSource<RoomData> source = createRoomSource(topic, properties, deserializer);
+			DataStream<RoomData> stream = env.fromSource(
+					source,
+					WatermarkStrategy.noWatermarks(),
+					"Kafka Source - " + topic
+			);
+
+			resultStream = (resultStream == null) ? stream : resultStream.union(stream);
+		}
+
+		return resultStream;
+	}
 
 	public static void main(String[] args) throws Exception {
-		// Sets up the execution environment, which is the main entry point
-		// to building Flink applications.
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-		/*
-		 * Here, you can start creating your execution plan for Flink.
-		 *
-		 * Start with getting some data from the environment, like
-		 * 	env.fromSequence(1, 10);
-		 *
-		 * then, transform the resulting DataStream<Long> using operations
-		 * like
-		 * 	.filter()
-		 * 	.flatMap()
-		 * 	.window()
-		 * 	.process()
-		 *
-		 * and many more.
-		 * Have a look at the programming guide:
-		 *
-		 * https://nightlies.apache.org/flink/flink-docs-stable/
-		 *
-		 */
+		Properties properties = new Properties();
+		properties.setProperty("bootstrap.servers", "localhost:9092");
+		properties.setProperty("group.id", "flink-group");
 
-		// Execute program, beginning computation.
-		env.execute("Flink Java API Skeleton");
+		// Choose your deserializer (POJO or Proto)
+		DeserializationSchema<RoomData> deserializer = new RoomDataPojoDeserialization();
+//		DeserializationSchema<RoomDataProtos.RoomData> protoDeserializer = new RoomDataProtoDeserialization();
+		// Alternatively: new RoomDataProtoDeserialization();
+
+		DataStream<RoomData> allRoomsStream = createRoomStreams(env, properties, deserializer);
+
+		// Apply window operations
+		allRoomsStream
+				.keyBy(RoomData::getRoomId)
+				.window(TumblingProcessingTimeWindows.of(Time.minutes(5)))
+				.process(new MovingAverage())
+				.print();
+
+		allRoomsStream
+				.keyBy(RoomData::getRoomId)
+				.window(TumblingProcessingTimeWindows.of(Time.minutes(1)))
+				.process(new RapidChangeDetection())
+				.print();
+
+		allRoomsStream
+				.keyBy(RoomData::getRoomId)
+				.window(TumblingProcessingTimeWindows.of(Time.minutes(10)))
+				.process(new OccupancyDetector())
+				.print();
+
+		env.execute("Multi-Room Monitoring");
 	}
 }
