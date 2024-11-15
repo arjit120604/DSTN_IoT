@@ -29,10 +29,12 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
-import org.apache.flink.streaming.api.windowing.time.Time;
 
-import java.lang.reflect.Type;
+
+import java.time.Duration;
 import java.util.Properties;
 
 /**
@@ -84,6 +86,40 @@ public class DataStreamJob {
 		return resultStream;
 	}
 
+	private static void runJobPojo(StreamExecutionEnvironment env, Properties properties) {
+		DeserializationSchema<RoomData> deserializer = new RoomDataPojoDeserialization();
+		DataStream<RoomData> stream = createRoomStreams(env, properties, deserializer);
+
+		DataStream<RoomData> allRoomsStream = stream.assignTimestampsAndWatermarks(
+				WatermarkStrategy.<RoomData>forBoundedOutOfOrderness(Duration.ofSeconds(15))
+						.withTimestampAssigner((roomData, timestamp) -> roomData.getTimestamp())
+		);
+		// processingTimeWindows: system clock
+		// eventTimeWindows: timestamp in the data
+		allRoomsStream
+				.keyBy(RoomData::getRoomId)
+				.window(SlidingEventTimeWindows.of(Duration.ofMinutes(5), Duration.ofSeconds(30)))
+				.process(new MovingAverage())
+				.print();
+
+		allRoomsStream
+				.keyBy(RoomData::getRoomId)
+				.window(SlidingEventTimeWindows.of(Duration.ofMinutes(1), Duration.ofSeconds(10L)))
+				.process(new RapidChangeDetection())
+				.print();
+
+		allRoomsStream
+				.keyBy(RoomData::getRoomId)
+				.window(SlidingEventTimeWindows.of(Duration.ofMinutes(10), Duration.ofSeconds(30)))
+				.process(new OccupancyDetector())
+				.print();
+
+		allRoomsStream
+				.keyBy(RoomData::getRoomId)
+				.window(SlidingEventTimeWindows.of(Duration.ofMinutes(15), Duration.ofMinutes(1))) // Longer window for FFT
+				.process(new FFTAnomalyDetector())
+				.print();
+	}
 	public static void main(String[] args) throws Exception {
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -91,32 +127,7 @@ public class DataStreamJob {
 		properties.setProperty("bootstrap.servers", "localhost:9092");
 		properties.setProperty("group.id", "flink-group");
 
-		// Choose your deserializer (POJO or Proto)
-		DeserializationSchema<RoomData> deserializer = new RoomDataPojoDeserialization();
-//		DeserializationSchema<RoomDataProtos.RoomData> protoDeserializer = new RoomDataProtoDeserialization();
-		// Alternatively: new RoomDataProtoDeserialization();
-
-		DataStream<RoomData> allRoomsStream = createRoomStreams(env, properties, deserializer);
-
-		// Apply window operations
-		allRoomsStream
-				.keyBy(RoomData::getRoomId)
-				.window(TumblingProcessingTimeWindows.of(Time.minutes(5)))
-				.process(new MovingAverage())
-				.print();
-
-		allRoomsStream
-				.keyBy(RoomData::getRoomId)
-				.window(TumblingProcessingTimeWindows.of(Time.minutes(1)))
-				.process(new RapidChangeDetection())
-				.print();
-
-		allRoomsStream
-				.keyBy(RoomData::getRoomId)
-				.window(TumblingProcessingTimeWindows.of(Time.minutes(10)))
-				.process(new OccupancyDetector())
-				.print();
-
+		runJobPojo(env, properties);
 		env.execute("Multi-Room Monitoring");
 	}
 }

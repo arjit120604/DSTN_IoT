@@ -13,8 +13,7 @@ public class RoomDataProtoDeserialization implements DeserializationSchema<RoomD
         try {
             return RoomData.parseFrom(message);
         } catch (InvalidProtocolBufferException e) {
-            e.printStackTrace();
-            return null;
+            throw new IOException("Protobuf Deserialization failed", e);
         }
     }
     @Override

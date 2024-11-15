@@ -1,17 +1,20 @@
 package app;
 
 import app.models.RoomData;
+import app.utils.Config.RapidChange;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
 
-public class RapidChangeDetection extends ProcessWindowFunction<RoomData, Tuple2<String, String>, String, TimeWindow> {
+// out collector : {roomId, isTemperatureChange, isEnergyChange}
+public class RapidChangeDetection extends ProcessWindowFunction<RoomData, Tuple3<String, Boolean, Boolean>, String, TimeWindow> {
 
-    private static final Double TEMPERATURE_THRESHOLD = 2.0;//2 celsius
-    private static final Double ENERGY_THRESHOLD = 15.0;//assuming
+    private static final Double TEMPERATURE_THRESHOLD = RapidChange.TEMPERATURE_THRESHOLD;//2 celsius
+    private static final Double ENERGY_THRESHOLD = RapidChange.ENERGY_THRESHOLD;//assuming
     @Override
-    public void process(String roomId, Context context, Iterable<RoomData> elements, Collector<Tuple2<String, String>> out){
+    public void process(String roomId, Context context, Iterable<RoomData> elements, Collector<Tuple3<String, Boolean, Boolean>> out){
         double minTemp = Double.MAX_VALUE;
         double maxTemp = Double.MIN_VALUE;
         double minEnergy = Double.MAX_VALUE;
@@ -24,12 +27,15 @@ public class RapidChangeDetection extends ProcessWindowFunction<RoomData, Tuple2
             maxEnergy = Math.max(maxEnergy, roomData.getEnergyConsumption());
         }
 
-        if (maxTemp - minTemp >= TEMPERATURE_THRESHOLD){
-            out.collect(new Tuple2<>(roomId, "Rapid Temperature change detected"));
+        if (maxEnergy - minEnergy >= ENERGY_THRESHOLD && maxTemp - minTemp >= TEMPERATURE_THRESHOLD){
+            out.collect(new Tuple3<>(roomId, true, true));
+        }
+        else if (maxTemp - minTemp >= TEMPERATURE_THRESHOLD){
+            out.collect(new Tuple3<>(roomId, true, false));
         }
 
-        if (maxEnergy - minEnergy >= ENERGY_THRESHOLD){
-            out.collect(new Tuple2<>(roomId, "Rapid Energy consumption change detected"));
+        else if (maxEnergy - minEnergy >= ENERGY_THRESHOLD){
+            out.collect(new Tuple3<>(roomId, false, true));
         }
     }
 }
