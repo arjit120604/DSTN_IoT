@@ -7,6 +7,9 @@ import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class OccupancyDetector extends ProcessWindowFunction<
         RoomData, Tuple2<String, Boolean>, String, TimeWindow> {
 
@@ -18,33 +21,45 @@ public class OccupancyDetector extends ProcessWindowFunction<
     public void process(String roomId, Context context, Iterable<RoomData> elements,
                         Collector<Tuple2<String, Boolean>> out) {
 
-        double avgEnergy = 0.0;
+        double sumEnergy = 0.0;
+        List<Double> humidityList = new ArrayList<>();
+        List<Double> temperatureList = new ArrayList<>();
         long count = 0L;
-        double humidityVariation;
-        double temperatureVariation;
-        double maxHumidity = Double.MIN_VALUE;
-        double minHumidity = Double.MAX_VALUE;
-        double maxTemp = Double.MIN_VALUE;
-        double minTemp = Double.MAX_VALUE;
 
-
-        for (RoomData roomData: elements){
-            avgEnergy += roomData.getEnergyConsumption();
-            maxHumidity = Math.max(maxHumidity, roomData.getHumidity());
-            minHumidity = Math.min(minHumidity, roomData.getHumidity());
-            maxTemp = Math.max(maxTemp, roomData.getTemperature());
-            minTemp = Math.min(minTemp, roomData.getTemperature());
+        for (RoomData roomData : elements) {
+            sumEnergy += roomData.getEnergyConsumption();
+            humidityList.add(roomData.getHumidity());
+            temperatureList.add(roomData.getTemperature());
             count++;
         }
 
-        if (count == 0){
+        if (count == 0) {
             return;
         }
 
-        avgEnergy /= count;
-        humidityVariation = maxHumidity - minHumidity;
-        temperatureVariation = maxTemp - minTemp;
-        boolean isOccupied = avgEnergy > ENERGY_THRESHOLD && (humidityVariation > HUMIDITY_THRESHOLD || temperatureVariation > TEMPERATURE_THRESHOLD);
+        double avgEnergy = sumEnergy / count;
+        double stdDevHumidity = calculateStdDev(humidityList, calculateMean(humidityList));
+        double stdDevTemperature = calculateStdDev(temperatureList, calculateMean(temperatureList));
+
+        boolean isOccupied = avgEnergy > ENERGY_THRESHOLD &&
+                (stdDevHumidity > HUMIDITY_THRESHOLD || stdDevTemperature > TEMPERATURE_THRESHOLD);
+
         out.collect(new Tuple2<>(roomId, isOccupied));
+    }
+
+    private double calculateMean(List<Double> data) {
+        double sum = 0.0;
+        for (Double d : data) {
+            sum += d;
+        }
+        return sum / data.size();
+    }
+
+    private double calculateStdDev(List<Double> data, double mean) {
+        double sum = 0.0;
+        for (Double d : data) {
+            sum += Math.pow(d - mean, 2);
+        }
+        return Math.sqrt(sum / data.size());
     }
 }
