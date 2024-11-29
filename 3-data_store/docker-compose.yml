@@ -1,0 +1,53 @@
+# services:
+#   jobmanager:
+#     image: flink:1.20
+#     ports:
+#       - "9092:9092"
+#     command: jobmanager
+#     volumes:
+#       - ./config.yaml:/opt/flink/conf/config.yaml
+#     environment:
+#       - JOB_MANAGER_RPC_ADDRESS=jobmanager
+
+#   taskmanager:
+#     image: flink:1.20
+#     depends_on:
+#       - jobmanager
+#     command: taskmanager
+#     volumes:
+#       - ./config.yaml:/opt/flink/conf/config.yaml
+#     environment:
+#       - JOB_MANAGER_RPC_ADDRESS=jobmanager
+
+version: '3.9'
+
+services:
+  store-service:
+    build:
+      context: .
+    ports:
+      - "5000:8081"  # Map the container's port 9092 to the host
+    environment:
+      FLASK_ENV: development
+
+  jobmanager:
+    image: flink:1.20
+    ports:
+      - "8081:8081"  # Flink  JobManager Web UI
+    command: jobmanager
+    volumes:
+      - ./config.yaml:/opt/flink/conf/config.yaml
+    environment:
+      - JOB_MANAGER_RPC_HOST=jobmanager  # Corrected environment variable name
+
+  taskmanager:
+    image: flink:1.20
+    depends_on:
+      - jobmanager
+    command: taskmanager
+    volumes:
+      - ./config.yaml:/opt/flink/conf/config.yaml
+    environment:
+      - JOB_MANAGER_RPC_HOST=jobmanager  # Corrected environment variable name
+    deploy:
+      replicas: 2  # Scale TaskManager to 2 instances (adjust as needed)
