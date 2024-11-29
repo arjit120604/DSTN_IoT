@@ -1,18 +1,17 @@
 import pandas as pd
 import time
-from kafka import KafkaProducer
+from confluent_kafka import Producer
 import json
 
-
 # Load the dataset
-dataset = pd.read_csv('./HomeC.csv')
+dataset = pd.read_csv('./HomeC.csv', low_memory=False)
 
 # Kafka setup: configure the Kafka producer
-producer = KafkaProducer(
-    bootstrap_servers=['localhost:9092'],
-    value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-    compression_type='gzip'  # Options: 'gzip', 'snappy', 'lz4', 'zstd'
-)
+producer = Producer({
+    'bootstrap.servers': 'localhost:9093',  # Kafka broker address
+    # 'compression.type': 'gzip',
+                 # Options: 'gzip', 'snappy', 'lz4', 'zstd'
+})
 
 # Define the topics for each sensor type
 topics = {
@@ -25,25 +24,31 @@ topics = {
 def simulate_sensor_data(row):
     # Extract each type of sensor data and send to the respective Kafka topic
     temp_data = {
-        'time': row['time'],
+        'roomId': 'room1',
+        'timestamp': row['time'],
         'temperature': row['temperature'],
     }
-    producer.send(topics['temperature'], temp_data)
+    producer.produce(topics['temperature'], value=json.dumps(temp_data))
 
     humidity_data = {
-        'time': row['time'],
+        'roomId': 'room1',
+        'timestamp': row['time'],
         'humidity': row['humidity'],
     }
-    producer.send(topics['humidity'], humidity_data)
+    producer.produce(topics['humidity'], value=json.dumps(humidity_data))
 
     energy_data = {
-        'time': row['time'],
+        'roomId': 'room1',
+        'timestamp': row['time'],
         'use': row['use [kW]'],
         'gen': row['gen [kW]']
     }
-    producer.send(topics['energy'], energy_data)
+    producer.produce(topics['energy'], value=json.dumps(energy_data))
 
     print(f"Sent data - Temp: {temp_data}, Humidity: {humidity_data}, Energy: {energy_data}")
+
+    # Ensure messages are delivered
+    producer.flush()
 
 # Simulate the real-time sensor stream
 for _, row in dataset.iterrows():
@@ -51,4 +56,4 @@ for _, row in dataset.iterrows():
     time.sleep(1)  # Adjust the delay to simulate real-time streaming
 
 # Close the producer after streaming
-producer.close()
+producer.flush()

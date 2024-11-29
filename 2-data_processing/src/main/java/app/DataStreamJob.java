@@ -24,6 +24,8 @@ import app.serialization.RoomDataPojoDeserialization;
 import app.serialization.RoomDataProtoDeserialization;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
+import org.apache.flink.formats.json.JsonDeserializationSchema;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonDeserializer;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
@@ -32,7 +34,6 @@ import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
-
 
 import java.time.Duration;
 import java.util.Properties;
@@ -50,11 +51,10 @@ import java.util.Properties;
  * method, change the respective entry in the POM.xml file (simply search for 'mainClass').
  */
 public class DataStreamJob {
-	private static final String[] ROOM_TOPICS = {
-			"room1-sensors",
-			"room2-sensors",
-			"room3-sensors",
-			"room4-sensors"
+	private static final String[] SENSOR_TOPICS = {
+		"temperature_topic",
+		"humidity_topic",
+		"energy_topic"
 	};
 	private static KafkaSource<RoomData> createRoomSource(String topic, Properties properties, DeserializationSchema<RoomData> deserializer) {
 		return KafkaSource.<RoomData>builder()
@@ -72,11 +72,11 @@ public class DataStreamJob {
 
 		DataStream<RoomData> resultStream = null;
 
-		for (String topic : ROOM_TOPICS) {
+		for (String topic : SENSOR_TOPICS) {
 			KafkaSource<RoomData> source = createRoomSource(topic, properties, deserializer);
 			DataStream<RoomData> stream = env.fromSource(
 					source,
-					WatermarkStrategy.noWatermarks(),
+					WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(20)),
 					"Kafka Source - " + topic
 			);
 
@@ -91,11 +91,17 @@ public class DataStreamJob {
 		DataStream<RoomData> stream = createRoomStreams(env, properties, deserializer);
 
 		DataStream<RoomData> allRoomsStream = stream.assignTimestampsAndWatermarks(
-				WatermarkStrategy.<RoomData>forBoundedOutOfOrderness(Duration.ofSeconds(15))
-						.withTimestampAssigner((roomData, timestamp) -> roomData.getTimestamp())
+       WatermarkStrategy.<RoomData>forBoundedOutOfOrderness(Duration.ofSeconds(20))
+           .withTimestampAssigner((event, timestamp) -> {
+               // Use the event's timestamp field
+               return event.getTimestamp() != null ? event.getTimestamp() : System.currentTimeMillis();
+				})
 		);
 		// processingTimeWindows: system clock
 		// eventTimeWindows: timestamp in the data
+
+		allRoomsStream
+				.print();
 		allRoomsStream
 				.keyBy(RoomData::getRoomId)
 				.window(SlidingEventTimeWindows.of(Duration.ofMinutes(5), Duration.ofSeconds(30)))
@@ -124,10 +130,26 @@ public class DataStreamJob {
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
 		Properties properties = new Properties();
-		properties.setProperty("bootstrap.servers", "localhost:9092");
+		properties.setProperty("bootstrap.servers", "kafka:9092");
 		properties.setProperty("group.id", "flink-group");
 
-		runJobPojo(env, properties);
+//		runJobPojo(env, properties);
+		JsonDeserializationSchema<RoomData> jsonFormat=new JsonDeserializationSchema<>(RoomData.class);
+//
+		KafkaSource<RoomData> src = KafkaSource.<RoomData>builder()
+				.setProperties(properties)
+				.setTopics("temperature_topic")
+				.setStartingOffsets(OffsetsInitializer.earliest())
+				.setValueOnlyDeserializer(jsonFormat)
+				.build();
+		DataStream<RoomData> stream = env
+				.fromSource(
+						src,
+						WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(20)),
+						"Kafka Source - temperature_topic"
+				);
+		stream.print();
+
 		env.execute("Multi-Room Monitoring");
 	}
 }

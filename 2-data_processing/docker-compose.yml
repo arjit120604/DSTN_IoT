@@ -1,4 +1,6 @@
-
+networks:
+  flink-network:
+    external: true
 services:
   jobmanager:
     image: flink:1.20
@@ -7,8 +9,11 @@ services:
     command: jobmanager
     volumes:
       - ./config.yaml:/opt/flink/conf/config.yaml
+      - ./target:/opt/flink/usrlib
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
+    networks:
+      - flink-network
 
   taskmanager:
     image: flink:1.20
@@ -17,5 +22,8 @@ services:
     command: taskmanager
     volumes:
       - ./config.yaml:/opt/flink/conf/config.yaml
+      - ./target:/opt/flink/usrlib
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
+    networks:
+      - flink-network

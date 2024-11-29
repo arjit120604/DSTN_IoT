@@ -1,6 +1,7 @@
 package app.serialization;
 
 import app.models.RoomData;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -13,7 +14,41 @@ public class RoomDataPojoDeserialization implements DeserializationSchema<RoomDa
     @Override
     public RoomData deserialize(byte[] message) throws IOException {
         try {
-            return objectMapper.readValue(message, RoomData.class);
+            JsonNode jsonNode = objectMapper.readTree(message);
+            RoomData roomData = new RoomData();
+            
+            // Set room ID
+            if (jsonNode.has("roomId")) {
+                roomData.setRoomId(jsonNode.get("roomId").asText());
+            } else {
+                roomData.setRoomId("unknown");
+            }
+
+            // Set timestamp
+            if (jsonNode.has("timestamp")) {
+                roomData.setTime(jsonNode.get("timestamp").asText());
+            }
+            
+            // Set time as needed
+            if (jsonNode.has("time")) {
+                roomData.setTime(jsonNode.get("time").asText());
+            }
+            
+            // Set sensor values based on message type
+            if (jsonNode.has("temperature")) {
+                roomData.setTemperature(jsonNode.get("temperature").asDouble());
+            }
+            if (jsonNode.has("humidity")) {
+                roomData.setHumidity(jsonNode.get("humidity").asDouble());
+            }
+            if (jsonNode.has("use")) {
+                roomData.setEnergyConsumption(jsonNode.get("use").asDouble());
+            }
+            if (jsonNode.has("gen")) {
+                roomData.setGen(jsonNode.get("gen").asDouble());
+            }
+
+            return roomData;
         } catch (Exception e) {
             e.printStackTrace();
             throw new IOException("Deserialization failed", e);
@@ -21,7 +56,7 @@ public class RoomDataPojoDeserialization implements DeserializationSchema<RoomDa
     }
 
     @Override
-    public boolean isEndOfStream(RoomData nextElement) {
+    public boolean isEndOfStream(RoomData roomData) {
         return false;
     }
 

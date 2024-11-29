@@ -1,8 +1,3 @@
-execution:
-  checkpointing:
-    interval: 10000
-rest:
-  port: 8081
 blob:
   server:
     port: '6124'
@@ -11,18 +6,26 @@ taskmanager:
     process:
       size: 2048m
   numberOfTaskSlots: 1
-parallelism:
-  default: 1
+logging:
+  level: INFO
+  file: true
 jobmanager:
   rpc:
     address: jobmanager
   memory:
     process:
       size: 2048m
+query:
+  server:
+    port: '6125'
+execution:
+  checkpointing:
+    interval: 10000
+rest:
+  port: 8081
+parallelism:
+  default: 1
 state:
   backend: filesystem
   checkpoints:
     dir: file:///tmp/flink-checkpoints
-query:
-  server:
-    port: '6125'
