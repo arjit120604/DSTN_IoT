@@ -10,6 +10,7 @@ services:
     volumes:
       - ./config.yaml:/opt/flink/conf/config.yaml
       - ./target:/opt/flink/usrlib
+      - ./logs/taskmanager:/opt/flink/log
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
     networks:
@@ -23,7 +24,12 @@ services:
     volumes:
       - ./config.yaml:/opt/flink/conf/config.yaml
       - ./target:/opt/flink/usrlib
+      - ./logs/taskmanager:/opt/flink/log
+      - ./log4j-taskmanager.properties:/opt/flink/conf/log4j-console.properties
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
     networks:
       - flink-network
+    logging:
+      driver: "json-file"
+      

@@ -1,27 +1,28 @@
 package app.models;
 
 public class RoomData {
-    private String time;
     private Double temperature;
     private Double humidity;
     private Double use;
     private Double gen;
     private String roomId;
     private Long timestamp;
-    // Getters and Setters
 
-    public String getTime() {
-        return time;
+    public RoomData() {
     }
+    public RoomData(String roomId, long timestamp){
+        this.roomId = roomId;
+        this.timestamp = timestamp;
+    }
+    public boolean isComplete(){
+        return this.temperature != null && this.humidity != null && this.use != null && this.gen != null;
+    }
+    // Getters and Setters
     public String getRoomId() {
         return roomId;
     }
     public void setRoomId(String roomId) {
         this.roomId = roomId;
-    }
-
-    public void setTime(String time) {
-        this.time = time;
     }
 
     public Double getTemperature() {
@@ -72,7 +73,7 @@ public class RoomData {
     @Override
     public String toString() {
         return "RoomData{" +
-                "time='" + time + '\'' +
+                "timestamp='" + timestamp + '\'' +
                 ", temperature=" + temperature +
                 ", humidity=" + humidity +
                 ", use=" + use +

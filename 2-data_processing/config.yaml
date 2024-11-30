@@ -7,8 +7,11 @@ taskmanager:
       size: 2048m
   numberOfTaskSlots: 1
 logging:
+  file:
+    path: ./logs/taskmanager/docker-taskmanager.log
   level: INFO
-  file: true
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{60} %X{sourceThread} - %msg%n'
 jobmanager:
   rpc:
     address: jobmanager

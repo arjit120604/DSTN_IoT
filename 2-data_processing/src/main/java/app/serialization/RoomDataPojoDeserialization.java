@@ -26,13 +26,10 @@ public class RoomDataPojoDeserialization implements DeserializationSchema<RoomDa
 
             // Set timestamp
             if (jsonNode.has("timestamp")) {
-                roomData.setTime(jsonNode.get("timestamp").asText());
+                roomData.setTimestamp(jsonNode.get("timestamp").asLong());
             }
             
             // Set time as needed
-            if (jsonNode.has("time")) {
-                roomData.setTime(jsonNode.get("time").asText());
-            }
             
             // Set sensor values based on message type
             if (jsonNode.has("temperature")) {

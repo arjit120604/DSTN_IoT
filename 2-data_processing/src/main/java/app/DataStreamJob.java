@@ -18,7 +18,12 @@
 
 package app;
 
+import app.joiner.RoomDataEnergyJoiner;
+import app.joiner.TempHumidityJoiner;
+import app.models.EnergyModel;
+import app.models.HumidityModel;
 import app.models.RoomData;
+import app.models.TemperatureModel;
 import app.proto.RoomDataProtos;
 import app.serialization.RoomDataPojoDeserialization;
 import app.serialization.RoomDataProtoDeserialization;
@@ -33,6 +38,7 @@ import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 
 import java.time.Duration;
@@ -86,46 +92,41 @@ public class DataStreamJob {
 		return resultStream;
 	}
 
-	private static void runJobPojo(StreamExecutionEnvironment env, Properties properties) {
-		DeserializationSchema<RoomData> deserializer = new RoomDataPojoDeserialization();
-		DataStream<RoomData> stream = createRoomStreams(env, properties, deserializer);
+	private static void runJobPojo(DataStream<RoomData> allRoomsStream, StreamExecutionEnvironment env, Properties properties) {
 
-		DataStream<RoomData> allRoomsStream = stream.assignTimestampsAndWatermarks(
-       WatermarkStrategy.<RoomData>forBoundedOutOfOrderness(Duration.ofSeconds(20))
-           .withTimestampAssigner((event, timestamp) -> {
-               // Use the event's timestamp field
-               return event.getTimestamp() != null ? event.getTimestamp() : System.currentTimeMillis();
-				})
-		);
 		// processingTimeWindows: system clock
 		// eventTimeWindows: timestamp in the data
 
-		allRoomsStream
-				.print();
+//		allRoomsStream.print();
+
 		allRoomsStream
 				.keyBy(RoomData::getRoomId)
-				.window(SlidingEventTimeWindows.of(Duration.ofMinutes(5), Duration.ofSeconds(30)))
+				.window(TumblingEventTimeWindows.of(Duration.ofMinutes(1), Duration.ofSeconds(5)))
 				.process(new MovingAverage())
+				.name("Moving Average")
 				.print();
 
 		allRoomsStream
 				.keyBy(RoomData::getRoomId)
-				.window(SlidingEventTimeWindows.of(Duration.ofMinutes(1), Duration.ofSeconds(10L)))
+				.window(SlidingEventTimeWindows.of(Duration.ofMinutes(1), Duration.ofSeconds(10)))
 				.process(new RapidChangeDetection())
-				.print();
+				.print()
+				.name("Rapid Change Detection");
 
 		allRoomsStream
 				.keyBy(RoomData::getRoomId)
-				.window(SlidingEventTimeWindows.of(Duration.ofMinutes(10), Duration.ofSeconds(30)))
+				.window(SlidingEventTimeWindows.of(Duration.ofMinutes(1), Duration.ofSeconds(30)))
 				.process(new OccupancyDetector())
+				.name("Occupancy Detector")
 				.print();
 
-		allRoomsStream
-				.keyBy(RoomData::getRoomId)
-				.window(SlidingEventTimeWindows.of(Duration.ofMinutes(15), Duration.ofMinutes(1))) // Longer window for FFT
-				.process(new FFTAnomalyDetector())
-				.print();
+//		allRoomsStream
+//				.keyBy(RoomData::getRoomId)
+//				.window(SlidingEventTimeWindows.of(Duration.ofMinutes(15), Duration.ofMinutes(1))) // Longer window for FFT
+//				.process(new FFTAnomalyDetector())
+//				.print();
 	}
+
 	public static void main(String[] args) throws Exception {
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -142,13 +143,52 @@ public class DataStreamJob {
 				.setStartingOffsets(OffsetsInitializer.earliest())
 				.setValueOnlyDeserializer(jsonFormat)
 				.build();
-		DataStream<RoomData> stream = env
-				.fromSource(
-						src,
-						WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(20)),
-						"Kafka Source - temperature_topic"
-				);
-		stream.print();
+		KafkaSource<TemperatureModel> tempSrc = KafkaSource.<TemperatureModel>builder()
+				.setProperties(properties)
+				.setTopics("temperature_topic")
+				.setStartingOffsets(OffsetsInitializer.earliest())
+				.setValueOnlyDeserializer(new JsonDeserializationSchema<>(TemperatureModel.class))
+				.build();
+
+		KafkaSource<HumidityModel> humiditySrc = KafkaSource.<HumidityModel>builder()
+				.setProperties(properties)
+				.setTopics("humidity_topic")
+				.setStartingOffsets(OffsetsInitializer.earliest())
+				.setValueOnlyDeserializer(new JsonDeserializationSchema<>(HumidityModel.class))
+				.build();
+		KafkaSource<EnergyModel> energySrc = KafkaSource.<EnergyModel>builder()
+				.setProperties(properties)
+				.setTopics("energy_topic")
+				.setStartingOffsets(OffsetsInitializer.earliest())
+				.setValueOnlyDeserializer(new JsonDeserializationSchema<>(EnergyModel.class))
+				.build();
+
+		DataStream<TemperatureModel> tempStream = env
+				.fromSource(tempSrc, WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofMillis(500)), "Temperature Source");
+
+		DataStream<HumidityModel> humidityStream = env
+				.fromSource(humiditySrc, WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofMillis(500)), "Humidity Source");
+
+		DataStream<EnergyModel> energyStream = env
+				.fromSource(energySrc, WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofMillis(500)), "Energy Source");
+
+		DataStream<RoomData> combinedStream = tempStream
+				.map(temp -> {
+					RoomData data = new RoomData(temp.getRoomId(), temp.getTimestamp());
+					data.setTemperature(temp.getTemperature());
+					return data;
+				})
+				.keyBy(RoomData::getRoomId)
+				.connect(humidityStream.keyBy(HumidityModel::getRoomId))
+				.process(new TempHumidityJoiner())
+				.keyBy(RoomData::getRoomId)
+				.connect(energyStream.keyBy(EnergyModel::getRoomId))
+				.process(new RoomDataEnergyJoiner());
+
+		// Continue with your existing processing
+		DataStream<RoomData> processedStream = combinedStream;
+//		processedStream.print();
+		runJobPojo(processedStream, env, properties);
 
 		env.execute("Multi-Room Monitoring");
 	}
