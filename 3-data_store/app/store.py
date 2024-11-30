@@ -2,9 +2,10 @@ from flask import Flask, request, jsonify
 import zlib
 import json
 import base64
+from flask_cors import CORS
 
 app = Flask(__name__)
-
+CORS(app)
 # In-memory data store (compressed)
 compressed_store = {}
 
@@ -84,4 +85,4 @@ def delete_data():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host="172.20.217.43", port=5000)
+    app.run(host="0.0.0.0", port=8080)

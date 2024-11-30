@@ -9,7 +9,7 @@ dataset = pd.read_csv('./HomeC.csv', low_memory=False)
 # Kafka setup: configure the Kafka producer
 producer = Producer({
     'bootstrap.servers': 'localhost:9093',  # Kafka broker address
-    # 'compression.type': 'gzip',
+    'compression.type': 'gzip',
                  # Options: 'gzip', 'snappy', 'lz4', 'zstd'
 })
 

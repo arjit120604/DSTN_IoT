@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/2-data_processing/2-data_processing.iml" filepath="$PROJECT_DIR$/2-data_processing/2-data_processing.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/DSTN_IoT_project.iml" filepath="$PROJECT_DIR$/.idea/DSTN_IoT_project.iml" />
     </modules>
   </component>

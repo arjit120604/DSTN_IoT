@@ -10,3 +10,8 @@ docker ps | grep jobmanager
 
 docker exec -it flink-jobmanager flink cancel <job-id>
 ```
+
+## To copy the logs
+```bash
+docker-compose logs taskmanager > ./logs/taskmanager/docker-taskmanager.log
+```
