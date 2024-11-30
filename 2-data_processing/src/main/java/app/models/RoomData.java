@@ -54,7 +54,7 @@ public class RoomData {
         return gen;
     }
 
-    public Long getTimestamp() {
+    public long getTimestamp() {
         return timestamp;
     }
 
