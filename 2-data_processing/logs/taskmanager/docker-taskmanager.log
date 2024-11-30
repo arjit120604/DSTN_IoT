@@ -1,7 +1,0 @@
-taskmanager-1  | Starting Task Manager
-taskmanager-1  | Starting taskexecutor as a console application on host 2030aeef75f8.
-taskmanager-1  | WARNING: An illegal reflective access operation has occurred
-taskmanager-1  | WARNING: Illegal reflective access by org.jboss.netty.util.internal.ByteBufferUtil (file:/tmp/flink-rpc-akka361ca18c-a1e8-4d66-98ec-96ec77fa6819.jar) to method java.nio.DirectByteBuffer.cleaner()
-taskmanager-1  | WARNING: Please consider reporting this to the maintainers of org.jboss.netty.util.internal.ByteBufferUtil
-taskmanager-1  | WARNING: Use --illegal-access=warn to enable warnings of further illegal reflective access operations
-taskmanager-1  | WARNING: All illegal access operations will be denied in a future release

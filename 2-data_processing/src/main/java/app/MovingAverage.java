@@ -23,8 +23,8 @@ public class MovingAverage extends ProcessWindowFunction<
 
         System.out.println("Processing window for room {}: {} to {}"+
                 roomId+
-                context.window().getStart()+
-                context.window().getEnd());
+                (context.window().getStart()-
+                context.window().getEnd()));
         for (RoomData roomData : elements) {
             sumTemperature += roomData.getTemperature();
             sumHumidity += roomData.getHumidity();
